@@ -248,7 +248,11 @@ class PipxMetadata:
             "python_version": self.python_version,
             "source_interpreter": self.source_interpreter,
             "venv_args": self.venv_args,
-            "injected_packages": {name: asdict(data) for (name, data) in self.injected_packages.items()},
+            # Keyed on the bare package name: ``from_dict`` builds each in-memory key by appending ``suffix``
+            # to the recorded one, so writing the in-memory key back appends it again on every read.
+            "injected_packages": {
+                (data.package or name): asdict(data) for (name, data) in self.injected_packages.items()
+            },
             "backend": self.backend,
             "exposure_enabled": self.exposure_enabled,
             "pipx_metadata_version": self.__METADATA_VERSION__,

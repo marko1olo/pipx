@@ -66,7 +66,7 @@ def test_pipx_metadata_file_create(tmp_path: Path) -> None:
     pipx_metadata.python_version = "3.4.5"
     pipx_metadata.source_interpreter = Path(sys.executable)
     pipx_metadata.venv_args = ["--system-site-packages"]
-    pipx_metadata.injected_packages = {"injected": TEST_PACKAGE2}
+    pipx_metadata.injected_packages = {"inj_package": TEST_PACKAGE2}
     pipx_metadata.exposure_enabled = False
     pipx_metadata.write()
 
@@ -82,6 +82,22 @@ def test_pipx_metadata_file_create(tmp_path: Path) -> None:
         "exposure_enabled",
     ]:
         assert getattr(pipx_metadata, attribute) == getattr(pipx_metadata2, attribute)
+
+
+def test_pipx_metadata_file_keeps_suffixed_injected_key(tmp_path: Path) -> None:
+    # Regression: from_dict builds each in-memory key by appending the recorded suffix, so writing that key
+    # back appended the suffix again on every read until `pipx uninject` could no longer find the package.
+    venv_dir = tmp_path / "venv"
+    venv_dir.mkdir()
+    pipx_metadata = PipxMetadata(venv_dir, read=False)
+    pipx_metadata.main_package = TEST_PACKAGE1
+    pipx_metadata.injected_packages = {"inj_package": replace(TEST_PACKAGE2, suffix="@1")}
+    pipx_metadata.write()
+
+    for _ in range(2):
+        pipx_metadata = PipxMetadata(venv_dir)
+        assert pipx_metadata.injected_packages.keys() == {"inj_package@1"}
+        pipx_metadata.write()
 
 
 def test_pipx_metadata_file_defaults_exposure_for_version_0_6(tmp_path: Path) -> None:
