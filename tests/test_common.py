@@ -130,3 +130,29 @@ def test_get_exposed_paths_matches_copied_launcher(tmp_path: Path, mocker: Mocke
     exposed = get_exposed_paths_for_package(venv_resource_path, local_resource_dir)
 
     assert (launcher in exposed) is owned
+
+
+# A Windows launcher writes the interpreter into the shebang unquoted, spaces and all, so the line cannot be
+# split on whitespace to recover the path the copy was built for.
+@pytest.mark.parametrize(
+    "shebang",
+    [
+        pytest.param("{interpreter}", id="unquoted"),
+        pytest.param('"{interpreter}"', id="quoted"),
+        pytest.param("{interpreter} -E", id="interpreter-arguments"),
+    ],
+)
+def test_get_exposed_paths_matches_copied_launcher_under_path_with_space(
+    tmp_path: Path, mocker: MockerFixture, shebang: str
+) -> None:
+    mocker.patch.object(common, "can_symlink", autospec=True, return_value=False)
+    venv_resource_path = tmp_path / "pipx home" / "venvs" / "myapp" / "Scripts"
+    venv_resource_path.mkdir(parents=True)
+    local_resource_dir = tmp_path / "bin"
+    local_resource_dir.mkdir()
+    launcher = local_resource_dir / "myapp"
+    launcher.write_text(f"#!{shebang.format(interpreter=venv_resource_path / 'python.exe')}\n")
+
+    exposed = get_exposed_paths_for_package(venv_resource_path, local_resource_dir)
+
+    assert launcher in exposed

@@ -419,18 +419,24 @@ def _copy_launcher_targets_venv(resource_path: Path, venv_resource_path: Path) -
         end = data.find(b"\n", marker)
         line = (data[start:] if end == -1 else data[start:end]).strip()
         if line.startswith(b'"'):
-            interpreter = line[1:close] if (close := line.find(b'"', 1)) != -1 else b""
+            interpreters: Iterable[bytes] = (line[1:close],) if (close := line.find(b'"', 1)) != -1 else ()
         else:
-            interpreter = parts[0] if (parts := line.split()) else b""
-        try:
-            if interpreter and Path(os.fsdecode(interpreter)).parent.samefile(venv_resource_path):
-                return True
-        except (OSError, ValueError):
-            # The scan reads every file in the bin directory, so a stray "#!" in a foreign binary leads here with
-            # arbitrary bytes rather than a path: os.fsdecode rejects undecodable ones under the surrogatepass
-            # codec Windows uses, and stat rejects an embedded NUL. Neither makes the copy ours.
-            continue
+            # A Windows launcher leaves the interpreter path unquoted even when it holds a space, so an unquoted
+            # line is as likely to be one path as a path followed by interpreter arguments; read it both ways.
+            interpreters = dict.fromkeys((line, *line.split()[:1]))
+        if any(_interpreter_lives_in(interpreter, venv_resource_path) for interpreter in interpreters):
+            return True
     return False
+
+
+def _interpreter_lives_in(interpreter: bytes, venv_resource_path: Path) -> bool:
+    try:
+        return bool(interpreter) and Path(os.fsdecode(interpreter)).parent.samefile(venv_resource_path)
+    except (OSError, ValueError):
+        # The scan reads every file in the bin directory, so a stray "#!" in a foreign binary leads here with
+        # arbitrary bytes rather than a path: os.fsdecode rejects undecodable ones under the surrogatepass
+        # codec Windows uses, and stat rejects an embedded NUL. Neither makes the copy ours.
+        return False
 
 
 def get_exposed_man_paths_for_package(
