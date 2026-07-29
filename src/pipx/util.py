@@ -107,7 +107,14 @@ def safe_unlink(file: Path) -> None:
     try:
         file.unlink()
     except PermissionError:
-        file.rename(_get_trash_file(file))
+        # The rename only escapes the lock a running executable holds, because the loader shares it for
+        # deletion. Any other holder -- a scanner, an editor, a backup agent -- blocks the rename exactly
+        # as it blocked the unlink, so this has to stay non-fatal: pipx calls safe_unlink in a loop while
+        # uninstalling, and aborting there would abandon every resource after this one. Mirrors rmdir.
+        try:
+            file.rename(_get_trash_file(file))
+        except OSError as error:
+            _LOGGER.warning("Failed to move %s to the trash; remove it by hand (%s).", file, error)
 
 
 def get_pypackage_bin_path(binary_name: str) -> Path:

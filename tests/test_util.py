@@ -11,6 +11,7 @@ import pytest
 
 from helpers import skip_if_windows
 from pipx import paths
+from pipx.constants import WINDOWS
 from pipx.util import exec_app, rmdir, run_subprocess, safe_unlink
 
 if TYPE_CHECKING:
@@ -106,6 +107,43 @@ def test_safe_unlink_handles_existing_trash_directory(mocker: MockerFixture, tmp
 
     assert not file.exists()
     assert [path.read_text() for path in trash_dir.iterdir()] == ["content"]
+
+
+def test_safe_unlink_is_non_fatal_when_the_trash_move_fails(
+    caplog: pytest.LogCaptureFixture,
+    mocker: MockerFixture,
+    tmp_path: Path,
+) -> None:
+    file = tmp_path / "locked.exe"
+    file.write_text("content")
+    mocker.patch.object(type(paths.ctx), "trash", mocker.PropertyMock(return_value=tmp_path / "trash"))
+    mocker.patch.object(Path, "unlink", side_effect=PermissionError("locked file"))
+    mocker.patch.object(Path, "rename", side_effect=PermissionError("locked file"))
+
+    with caplog.at_level(logging.WARNING, logger="pipx.util"):
+        safe_unlink(file)
+
+    assert file.is_file()
+    assert f"Failed to move {file} to the trash" in caplog.text
+
+
+@pytest.mark.skipif(not WINDOWS, reason="POSIX unlinks a file that is still open")
+def test_safe_unlink_is_non_fatal_for_a_locked_file(
+    caplog: pytest.LogCaptureFixture,
+    mocker: MockerFixture,
+    tmp_path: Path,
+) -> None:
+    file = tmp_path / "locked.exe"
+    file.write_bytes(b"MZ\x90\x00")
+    mocker.patch.object(type(paths.ctx), "trash", mocker.PropertyMock(return_value=tmp_path / "trash"))
+
+    # A handle opened without FILE_SHARE_DELETE blocks the trash rename just as it blocks the unlink, so
+    # hold a real one rather than raising PermissionError from a mock.
+    with file.open("rb"), caplog.at_level(logging.WARNING, logger="pipx.util"):
+        safe_unlink(file)
+
+    assert file.is_file()
+    assert f"Failed to move {file} to the trash" in caplog.text
 
 
 @pytest.mark.parametrize(
