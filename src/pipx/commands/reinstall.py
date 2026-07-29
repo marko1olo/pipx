@@ -210,10 +210,11 @@ def reinstall(  # ruff:ignore[too-many-arguments]  # reinstall rebuilds a venv f
         messages.extend(installed.messages)
 
         # now install injected packages
-        for injected_name, injected_package in venv.pipx_metadata.injected_packages.items():
+        main_suffix = venv.pipx_metadata.main_package.suffix
+        for injected_package in venv.pipx_metadata.injected_packages.values():
             inject_dep(
                 venv_dir,
-                injected_name,
+                injected_package.package,
                 _require_injected_url(injected_package, venv.name),
                 injected_package.pip_args,
                 verbose=verbose,
@@ -221,6 +222,8 @@ def reinstall(  # ruff:ignore[too-many-arguments]  # reinstall rebuilds a venv f
                 include_dependencies=injected_package.include_dependencies,
                 include_resources_from=injected_package.include_resources_from,
                 force=True,
+                # mirrors install_all: a package injected with --with-suffix must keep the venv's suffix
+                suffix=injected_package.suffix == main_suffix,
                 backend=backend or venv.pipx_metadata.backend,
                 env_backend=env_backend,
                 cooldown_days=injected_package.cooldown_days,

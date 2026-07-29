@@ -126,6 +126,20 @@ def test_upgrade_all_upgrades_outdated_package(
 
 
 @pytest.mark.usefixtures("pipx_temp_env")
+def test_upgrade_all_upgrades_outdated_suffixed_injection(capsys: pytest.CaptureFixture[str]) -> None:
+    # Regression: the outdated check named an injection from its record while upgrade-all named it from the
+    # metadata key, which carried an extra copy of the suffix, so the two never matched and the injection was
+    # silently left behind.
+    assert not run_pipx_cli(["install", "pycowsay", "--suffix=-test"])
+    assert not run_pipx_cli(["inject", "pycowsay-test", PKG["black"]["spec"], "--with-suffix"])
+    capsys.readouterr()
+
+    assert not run_pipx_cli(["upgrade-all", "--include-injected"])
+
+    assert "upgraded package black-test from 22.8.0 to " in capsys.readouterr().out
+
+
+@pytest.mark.usefixtures("pipx_temp_env")
 def test_upgrade_all_reports_outdated_check_failure(
     capsys: pytest.CaptureFixture[str],
     mocker: MockerFixture,

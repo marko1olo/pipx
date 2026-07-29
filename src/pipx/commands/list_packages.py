@@ -107,10 +107,12 @@ def list_pinned(venv_dirs: Iterable[Path], *, include_injected: bool) -> VenvPro
                     venv_metadata.main_package.package_version,
                 )
             if include_injected:
-                for pkg, info in venv_metadata.injected_packages.items():
+                for info in venv_metadata.injected_packages.values():
                     if info.pinned:
                         print(  # ruff:ignore[print]  # user-facing CLI output
-                            pkg, info.package_version, f"(injected in venv {venv_dir.name})"
+                            f"{info.package}{info.suffix}",
+                            info.package_version,
+                            f"(injected in venv {venv_dir.name})",
                         )
         all_venv_problems.or_(venv_problems)
 

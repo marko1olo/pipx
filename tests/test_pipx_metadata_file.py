@@ -66,7 +66,8 @@ def test_pipx_metadata_file_create(tmp_path: Path) -> None:
     pipx_metadata.python_version = "3.4.5"
     pipx_metadata.source_interpreter = Path(sys.executable)
     pipx_metadata.venv_args = ["--system-site-packages"]
-    pipx_metadata.injected_packages = {"injected": TEST_PACKAGE2}
+    # an injected package is keyed by the distribution name it records, the way Venv.update_package_metadata writes it
+    pipx_metadata.injected_packages = {"inj_package": TEST_PACKAGE2}
     pipx_metadata.exposure_enabled = False
     pipx_metadata.write()
 
@@ -82,6 +83,39 @@ def test_pipx_metadata_file_create(tmp_path: Path) -> None:
         "exposure_enabled",
     ]:
         assert getattr(pipx_metadata, attribute) == getattr(pipx_metadata2, attribute)
+
+
+def test_injected_package_keys_survive_a_write_read_cycle(tmp_path: Path) -> None:
+    # Regression: reading appended the recorded suffix to the key, so every write/read cycle grew the key by
+    # another copy of the suffix and no reader could look an injection up by its distribution name.
+    venv_dir: Final[Path] = tmp_path / "venv"
+    venv_dir.mkdir()
+    pipx_metadata = PipxMetadata(venv_dir, read=False)
+    pipx_metadata.main_package = replace(TEST_PACKAGE1, suffix="-test")
+    pipx_metadata.injected_packages = {"inj_package": replace(TEST_PACKAGE2, suffix="-test")}
+    pipx_metadata.write()
+
+    keys_per_cycle: Final[list[list[str]]] = []
+    for _ in range(3):
+        pipx_metadata = PipxMetadata(venv_dir)
+        keys_per_cycle.append(sorted(pipx_metadata.injected_packages))
+        pipx_metadata.write()
+
+    assert keys_per_cycle == [["inj_package"]] * 3
+
+
+def test_injected_package_keys_recover_from_a_suffixed_key(tmp_path: Path) -> None:
+    # An older pipx grew the key on every read, so a venv on disk can be keyed by the distribution name
+    # followed by any number of copies of the suffix.
+    venv_dir: Final[Path] = tmp_path / "venv"
+    venv_dir.mkdir()
+    injected: Final[PackageInfo] = replace(TEST_PACKAGE2, suffix="-test")
+    pipx_metadata = PipxMetadata(venv_dir, read=False)
+    pipx_metadata.main_package = replace(TEST_PACKAGE1, suffix="-test")
+    pipx_metadata.injected_packages = {"inj_package-test-test": injected}
+    pipx_metadata.write()
+
+    assert PipxMetadata(venv_dir).injected_packages == {"inj_package": injected}
 
 
 def test_pipx_metadata_file_defaults_exposure_for_version_0_6(tmp_path: Path) -> None:

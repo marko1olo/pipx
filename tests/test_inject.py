@@ -350,6 +350,24 @@ def test_inject_include_apps(with_suffix: bool) -> None:
 
 
 @pytest.mark.usefixtures("pipx_temp_env")
+def test_inject_with_suffix_keys_metadata_by_distribution_name(capsys: pytest.CaptureFixture[str]) -> None:
+    # Regression: the metadata key grew a copy of the suffix on every read, so the second inject stored the grown
+    # key and pipx listed the first injection with its suffix repeated.
+    assert not run_pipx_cli(["install", PKG["pycowsay"]["spec"], "--suffix=-test"])
+    assert not run_pipx_cli(["inject", "pycowsay-test", PKG["black"]["spec"], "--with-suffix"])
+    assert not run_pipx_cli(["inject", "pycowsay-test", PKG["pylint"]["spec"], "--with-suffix"])
+    capsys.readouterr()
+
+    assert not run_pipx_cli(["list", "--include-injected"])
+
+    listed: Final[list[str]] = re.findall(r"^ {6}- (\S+) ", capsys.readouterr().out, flags=re.MULTILINE)
+    assert (
+        sorted(PipxMetadata(paths.ctx.venvs / "pycowsay-test").injected_packages),
+        sorted(listed),
+    ) == (["black", "pylint"], ["black-test", "pylint-test"])
+
+
+@pytest.mark.usefixtures("pipx_temp_env")
 def test_inject_include_resources_from_dependency(
     local_extras_project: Path,
     empty_project: Path,

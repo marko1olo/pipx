@@ -31,15 +31,17 @@ def pin(
     skipped: list[_SkippedPackage] = []
     if injected_only or skip:
         skip_names = set(skip)
-        for package_name in venv.package_metadata:
+        for package_name, info in venv.package_metadata.items():
             if package_name == venv.main_package_name:
                 continue
-            if package_name in skip_names:
-                skipped.append(_SkippedPackage(venv.name, package_name, "requested"))
+            # the mapping is keyed by distribution name; report (and accept) the name pipx displays
+            display_name = f"{info.package}{info.suffix}"
+            if skip_names & {package_name, display_name}:
+                skipped.append(_SkippedPackage(venv.name, display_name, "requested"))
                 continue
-            if venv.package_metadata[package_name].pinned:
-                skipped.append(_SkippedPackage(venv.name, package_name, "already-pinned"))
-                messages.append(OutputMessage(f"pipx already pins {package_name}; skipping it."))
+            if info.pinned:
+                skipped.append(_SkippedPackage(venv.name, display_name, "already-pinned"))
+                messages.append(OutputMessage(f"pipx already pins {display_name}; skipping it."))
                 continue
             _update_pin_info(venv, package_name, is_main_package=False, pinned=True)
             packages.append(_changed_package(venv, package_name, _PinStatus.PINNED))
@@ -53,9 +55,9 @@ def pin(
             OutputMessage(f"pipx already pins package {main_package.package} {sleep}", stream=OutputStream.LOG)
         )
     else:
-        for package_name in venv.package_metadata:
-            if venv.package_metadata[package_name].pinned:
-                skipped.append(_SkippedPackage(venv.name, package_name, "already-pinned"))
+        for package_name, info in venv.package_metadata.items():
+            if info.pinned:
+                skipped.append(_SkippedPackage(venv.name, f"{info.package}{info.suffix}", "already-pinned"))
                 continue
             _update_pin_info(
                 venv,
@@ -79,9 +81,9 @@ def unpin(venv_dir: Path, *, verbose: bool) -> OperationResult[PinData]:
 
     packages: list[_ChangedPackage] = []
     skipped: list[_SkippedPackage] = []
-    for package_name in venv.package_metadata:
-        if not venv.package_metadata[package_name].pinned:
-            skipped.append(_SkippedPackage(venv.name, package_name, "not-pinned"))
+    for package_name, info in venv.package_metadata.items():
+        if not info.pinned:
+            skipped.append(_SkippedPackage(venv.name, f"{info.package}{info.suffix}", "not-pinned"))
             continue
         _update_pin_info(
             venv,

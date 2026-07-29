@@ -255,6 +255,19 @@ def test_upgrade_include_injected(capsys: pytest.CaptureFixture[str]) -> None:
 
 
 @pytest.mark.usefixtures("pipx_temp_env")
+def test_upgrade_include_injected_with_suffix(capsys: pytest.CaptureFixture[str]) -> None:
+    # Regression: upgrade walked the metadata keys, which carried the suffix, so it asked the venv for a
+    # distribution named after the suffixed key and failed with an internal error.
+    assert not run_pipx_cli(["install", PKG["pylint"]["spec"], "--suffix=-test"])
+    assert not run_pipx_cli(["inject", "pylint-test", PKG["black"]["spec"], "--with-suffix"])
+    capsys.readouterr()
+
+    assert not run_pipx_cli(["upgrade", "--include-injected", "pylint-test"])
+
+    assert "black-test" in capsys.readouterr().out
+
+
+@pytest.mark.usefixtures("pipx_temp_env")
 def test_upgrade_no_include_injected(capsys: pytest.CaptureFixture[str]) -> None:
     assert not run_pipx_cli(["install", PKG["pylint"]["spec"]])
     assert not run_pipx_cli(["inject", "pylint", PKG["black"]["spec"]])

@@ -492,7 +492,10 @@ def _get_list_output(  # ruff:ignore[too-many-arguments]  # flat rendering input
     )
     if injected_packages:
         output.append("    Injected Packages:")
-        output.extend(f"      - {name} {injected_packages[name].package_version}" for name in injected_packages)
+        # the display name comes from the record, not the mapping key, so --with-suffix injections read back right
+        output.extend(
+            f"      - {info.package}{info.suffix} {info.package_version}" for info in injected_packages.values()
+        )
     return "\n".join(output)
 
 
@@ -547,12 +550,6 @@ def run_post_install_actions(  # ruff:ignore[too-many-arguments]  # post-install
     package_metadata = venv.package_metadata[package_name]
 
     display_name = f"{package_name}{package_metadata.suffix}"
-
-    if (
-        venv.main_package_name != package_name
-        and venv.package_metadata[venv.main_package_name].suffix == package_metadata.suffix
-    ):
-        package_name = display_name
 
     if not package_metadata.apps:
         library_name = package_metadata.package or package_name

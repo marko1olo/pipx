@@ -118,12 +118,24 @@ def uninject_dep(
             ),
         )
 
-    if package_name not in venv.pipx_metadata.injected_packages:
+    # The mapping is keyed by distribution name, but ``pipx list`` shows an injection made with
+    # ``inject --with-suffix`` under its suffixed name, so accept either spelling. Both are canonicalized because a
+    # suffix may legally contain ``. _ -`` (see validate_suffix), which canonicalize_name rewrites.
+    injected_key: Final[str | None] = next(
+        (
+            key
+            for key, info in venv.pipx_metadata.injected_packages.items()
+            if package_name in {canonicalize_name(key), canonicalize_name(f"{info.package}{info.suffix}")}
+        ),
+        None,
+    )
+    if injected_key is None:
         return _uninject_failure(
             venv.name,
             package_name,
             f"{package_name} is not in the {venv.root.name} venv. Skipping.",
         )
+    package_name = injected_key
 
     package: Final[PackageInfo] = venv.package_metadata[package_name]
     need_app_uninstall: Final[bool] = package.include_apps
@@ -173,7 +185,8 @@ def uninject_dep(
         ),
         messages=(
             OutputMessage(
-                f"Uninjected package {bold(package_name)}{deps_string} from venv {bold(venv.root.name)} {stars}"
+                f"Uninjected package {bold(f'{package.package}{package.suffix}')}{deps_string} "
+                f"from venv {bold(venv.root.name)} {stars}"
             ),
         ),
     )

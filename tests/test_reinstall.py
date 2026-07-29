@@ -76,6 +76,19 @@ def test_reinstall_preserves_cooldowns(
 
 
 @pytest.mark.usefixtures("pipx_temp_env")
+def test_reinstall_preserves_injected_suffix() -> None:
+    # Regression: reinstall re-injected the package under its suffixed metadata key, which is not a distribution
+    # name, and dropped the suffix the injection was made with.
+    assert not run_pipx_cli(["install", "pycowsay", "--suffix=-test"])
+    assert not run_pipx_cli(["inject", "pycowsay-test", "black", "--with-suffix"])
+
+    assert not run_pipx_cli(["reinstall", "--python", sys.executable, "pycowsay-test"])
+
+    injected: Final[dict[str, PackageInfo]] = PipxMetadata(paths.ctx.venvs / "pycowsay-test").injected_packages
+    assert {name: info.suffix for name, info in injected.items()} == {"black": "-test"}
+
+
+@pytest.mark.usefixtures("pipx_temp_env")
 def test_reinstall_pylock_restores_source_after_build_failure(
     make_pylock: Callable[[str, str], Path],
     make_project_with_dependency: Callable[[str], Path],

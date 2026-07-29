@@ -11,6 +11,7 @@ from helpers import app_name, mock_legacy_venv, run_pipx_cli, skip_if_windows
 from package_info import PKG
 from pipx import paths
 from pipx.constants import WINDOWS
+from pipx.pipx_metadata_file import PipxMetadata
 from pipx.util import pipx_wrap
 
 if TYPE_CHECKING:
@@ -266,6 +267,26 @@ def test_uninject_with_suffix_removes_apps(
     assert all(file_or_symlink(path) for path in app_paths)
     assert not run_pipx_cli(["uninject", f"empty-project{suffix}", f"repeatme{suffix}"])
     assert not any(file_or_symlink(path) for path in app_paths)
+
+
+@pytest.mark.parametrize("requested_name", ["black", "black-test"])
+@pytest.mark.usefixtures("pipx_temp_env")
+def test_uninject_with_suffix_accepts_either_name(
+    capsys: pytest.CaptureFixture[str],
+    requested_name: str,
+) -> None:
+    # Regression: an injection made with --with-suffix was keyed by its suffixed name, so uninject could not find
+    # it under the distribution name pipx records. Both spellings have to work.
+    assert not run_pipx_cli(["install", "pycowsay", "--suffix=-test"])
+    assert not run_pipx_cli(["inject", "pycowsay-test", PKG["black"]["spec"], "--with-suffix"])
+    capsys.readouterr()
+
+    assert not run_pipx_cli(["uninject", "pycowsay-test", requested_name])
+
+    assert (
+        "Uninjected package black-test" in capsys.readouterr().out,
+        PipxMetadata(paths.ctx.venvs / "pycowsay-test").injected_packages,
+    ) == (True, {})
 
 
 @pytest.mark.usefixtures("pipx_temp_env")

@@ -294,8 +294,12 @@ class PipxMetadata:
         source_interpreter_raw = input_dict.get("source_interpreter")
         self.source_interpreter = Path(source_interpreter_raw) if source_interpreter_raw else None
         self.venv_args = input_dict.get("venv_args", [])
+        # Key on the recorded distribution name, which is the key ``Venv.update_package_metadata`` writes, so the
+        # mapping is a fixed point of the write/read cycle. Appending ``suffix`` here grew the key by one copy of
+        # the suffix on every cycle; preferring ``package`` over the stored key also re-keys a venv whose file
+        # already drifted, so those environments recover without a reinstall.
         self.injected_packages = {
-            f"{name}{data.get('suffix', '')}": PackageInfo(**data)
+            (data.get("package") or name): PackageInfo(**data)
             for (name, data) in input_dict.get("injected_packages", {}).items()
         }
         # Permissive: an unknown ``backend`` (manual edit, post-downgrade
