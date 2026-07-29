@@ -69,7 +69,11 @@ class PipBackend(Backend):
         if not include_pip:
             _, python_path, _ = get_venv_paths(root)
             pipx_pth = get_site_packages(python_path) / PIPX_SHARED_PTH
-            pipx_pth.write_text(f"{shared_libs.site_packages}\n")
+            # Write UTF-8 explicitly: the default encoding is the locale's, and a PIPX_HOME holding a
+            # character outside the active code page (common on non-English Windows) raises
+            # UnicodeEncodeError here. UTF-8 is also what site.addpackage decodes .pth files as, falling
+            # back to the locale encoding only for compatibility it already plans to deprecate.
+            pipx_pth.write_text(f"{shared_libs.site_packages}\n", encoding="utf-8")
 
     def install(  # ruff:ignore[no-self-use, too-many-arguments]  # Backend interface method mapping flags to pip options
         self,
